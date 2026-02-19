@@ -1,0 +1,315 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// NextAuth.js Models
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  name          String?
+  password      String?
+  image         String?
+  isAdmin       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+
+  @@index([email])
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Pars Tabela - Product Catalog Models
+// ---------------------------------------------------------------------------
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  description String?
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    Product[]
+
+  @@index([slug])
+}
+
+model Product {
+  id          String    @id @default(uuid())
+  name        String
+  description String?   @db.Text
+  price       Decimal?  @db.Decimal(10, 2)
+  categoryId  String
+  featured    Boolean   @default(false)
+  published   Boolean   @default(true)
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  category    Category       @relation(fields: [categoryId], references: [id])
+  images      ProductImage[]
+  inquiries   Inquiry[]
+  quotes      Quote[]        @relation("QuoteProduct")
+
+  @@index([categoryId])
+  @@index([published])
+  @@index([featured])
+}
+
+model ProductImage {
+  id        String   @id @default(uuid())
+  url       String
+  alt       String?
+  order     Int      @default(0)
+  productId String
+  createdAt DateTime @default(now())
+
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+// ---------------------------------------------------------------------------
+// Inquiry / Contact Form Submissions
+// ---------------------------------------------------------------------------
+
+enum InquiryStatus {
+  NEW
+  IN_REVIEW
+  REPLIED
+  CLOSED
+}
+
+model Inquiry {
+  id        String        @id @default(uuid())
+  name      String
+  email     String
+  phone     String?
+  message   String        @db.Text
+  productId String?
+  status    InquiryStatus @default(NEW)
+  notes     String?       @db.Text
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  product   Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Quotes / Orders Pipeline
+// ---------------------------------------------------------------------------
+
+enum QuoteStatus {
+  NEW
+  QUOTE_PREPARED
+  QUOTE_SENT
+  APPROVED
+  IN_PRODUCTION
+  READY_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+model Quote {
+  id                 String      @id @default(uuid())
+  referenceNumber    String      @unique
+  status             QuoteStatus @default(NEW)
+  customerName       String
+  customerEmail      String
+  customerPhone      String?
+  customerCompany    String?
+  productType        String?
+  description        String      @db.Text
+  dimensions         String?
+  referenceImageUrl  String?
+  estimatedDays      Int?
+  validUntil         DateTime?
+  subtotal           Decimal?    @db.Decimal(12, 2)
+  taxRate            Decimal     @default(18) @db.Decimal(5, 2)
+  taxAmount          Decimal?    @db.Decimal(12, 2)
+  total              Decimal?    @db.Decimal(12, 2)
+  deliveryDate       DateTime?
+  cancellationReason String?     @db.Text
+  customerNotes      String?     @db.Text
+  productId          String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  product        Product?             @relation("QuoteProduct", fields: [productId], references: [id], onDelete: SetNull)
+  items          QuoteItem[]
+  statusHistory  QuoteStatusHistory[]
+  notes          QuoteNote[]
+
+  @@index([status])
+  @@index([referenceNumber])
+  @@index([customerEmail])
+  @@index([createdAt])
+}
+
+model QuoteItem {
+  id        String   @id @default(uuid())
+  quoteId   String
+  name      String
+  quantity  Int      @default(1)
+  unitPrice Decimal  @db.Decimal(12, 2)
+  subtotal  Decimal  @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId])
+}
+
+model QuoteStatusHistory {
+  id         String      @id @default(uuid())
+  quoteId    String
+  fromStatus QuoteStatus?
+  toStatus   QuoteStatus
+  note       String?     @db.Text
+  createdAt  DateTime    @default(now())
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId])
+  @@index([createdAt])
+}
+
+model QuoteNote {
+  id        String   @id @default(uuid())
+  quoteId   String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId])
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
+  type      String   @default("info")
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  @@index([read])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Site Settings (key-value store)
+// ---------------------------------------------------------------------------
+
+model SiteSettings {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   @db.Text
+  group     String   @default("general")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([group])
+  @@index([key])
+}
+
+// ---------------------------------------------------------------------------
+// Auto Update System
+// ---------------------------------------------------------------------------
+
+enum UpdateStatus {
+  IN_PROGRESS
+  SUCCESS
+  FAILED
+}
+
+model UpdateLog {
+  id          String       @id @default(uuid())
+  version     String
+  commitHash  String
+  prevHash    String?
+  branch      String       @default("main")
+  status      UpdateStatus @default(IN_PROGRESS)
+  startedAt   DateTime     @default(now())
+  completedAt DateTime?
+  duration    Int?
+  steps       Json?
+  error       String?      @db.Text
+  triggeredBy String?
+
+  @@index([status])
+  @@index([startedAt])
+}
+
+model Backup {
+  id         String   @id @default(uuid())
+  path       String
+  dbPath     String
+  version    String
+  commitHash String
+  sizeBytes  Int      @default(0)
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}
