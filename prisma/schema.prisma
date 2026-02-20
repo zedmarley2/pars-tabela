@@ -241,6 +241,24 @@ model QuoteNote {
 }
 
 // ---------------------------------------------------------------------------
+// Media Library
+// ---------------------------------------------------------------------------
+
+model Media {
+  id        String   @id @default(cuid())
+  filename  String
+  path      String
+  url       String
+  mimetype  String
+  size      Int
+  width     Int?
+  height    Int?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
 // Notifications
 // ---------------------------------------------------------------------------
 

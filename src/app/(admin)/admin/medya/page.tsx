@@ -12,13 +12,18 @@ import {
   ImageIcon,
   CloudUpload,
   Calendar,
+  HardDrive,
 } from 'lucide-react';
 
 interface MediaItem {
   id: string;
+  filename: string;
+  path: string;
   url: string;
-  alt: string | null;
-  filename?: string;
+  mimetype: string;
+  size: number;
+  width: number | null;
+  height: number | null;
   createdAt: string;
 }
 
@@ -34,14 +39,10 @@ function formatDate(dateStr: string): string {
   });
 }
 
-function getFilenameFromUrl(url: string, alt: string | null): string {
-  if (alt) return alt;
-  try {
-    const parts = url.split('/');
-    return parts[parts.length - 1] ?? 'image';
-  } catch {
-    return 'image';
-  }
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function LoadingSkeleton() {
@@ -429,7 +430,6 @@ interface MediaCardProps {
 
 function MediaCard({ item, onCopyUrl, onDelete }: MediaCardProps) {
   const [hovered, setHovered] = useState(false);
-  const displayName = getFilenameFromUrl(item.url, item.alt);
 
   return (
     <div
@@ -441,7 +441,7 @@ function MediaCard({ item, onCopyUrl, onDelete }: MediaCardProps) {
       <div className="relative aspect-square overflow-hidden bg-gray-100 dark:bg-[#0f172a]">
         <Image
           src={item.url}
-          alt={item.alt ?? 'Medya dosyası'}
+          alt={item.filename}
           fill
           className="object-cover transition-transform duration-300 group-hover:scale-105"
           sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
@@ -487,14 +487,20 @@ function MediaCard({ item, onCopyUrl, onDelete }: MediaCardProps) {
       <div className="p-3">
         <p
           className="truncate text-sm font-medium text-gray-900 dark:text-white"
-          title={displayName}
+          title={item.filename}
         >
-          {displayName}
+          {item.filename}
         </p>
-        <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-          <Calendar className="h-3 w-3" />
-          {formatDate(item.createdAt)}
-        </p>
+        <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+          <span className="flex items-center gap-1">
+            <HardDrive className="h-3 w-3" />
+            {formatFileSize(item.size)}
+          </span>
+          <span className="flex items-center gap-1">
+            <Calendar className="h-3 w-3" />
+            {formatDate(item.createdAt)}
+          </span>
+        </div>
       </div>
     </div>
   );

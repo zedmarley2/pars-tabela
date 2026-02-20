@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAdmin } from '@/lib/admin-auth';
 import { Prisma } from '@prisma/client';
+import { unlink } from 'fs/promises';
 
 /**
  * GET /api/admin/media
- * List all ProductImages with pagination, search by alt/url.
+ * List all Media records with pagination and search.
  * Query params: page, limit, search
  */
 export async function GET(request: NextRequest) {
@@ -21,32 +22,27 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
     const search = searchParams.get('search');
 
-    const where: Prisma.ProductImageWhereInput = {};
+    const where: Prisma.MediaWhereInput = {};
 
     if (search) {
       where.OR = [
-        { alt: { contains: search, mode: 'insensitive' } },
+        { filename: { contains: search, mode: 'insensitive' } },
         { url: { contains: search, mode: 'insensitive' } },
       ];
     }
 
-    const [images, total] = await Promise.all([
-      prisma.productImage.findMany({
+    const [media, total] = await Promise.all([
+      prisma.media.findMany({
         where,
-        include: {
-          product: {
-            select: { id: true, name: true },
-          },
-        },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
-      prisma.productImage.count({ where }),
+      prisma.media.count({ where }),
     ]);
 
     return NextResponse.json({
-      data: images,
+      data: media,
       total,
       page,
       limit,
@@ -59,7 +55,8 @@ export async function GET(request: NextRequest) {
 
 /**
  * DELETE /api/admin/media
- * Delete a ProductImage by id (passed as query param).
+ * Delete a Media record by id (passed as query param).
+ * Also removes the file from disk.
  * Query params: id
  */
 export async function DELETE(request: NextRequest) {
@@ -73,17 +70,24 @@ export async function DELETE(request: NextRequest) {
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json({ error: 'Image id is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Media id is required' }, { status: 400 });
     }
 
-    const existing = await prisma.productImage.findUnique({ where: { id } });
+    const existing = await prisma.media.findUnique({ where: { id } });
     if (!existing) {
-      return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Media not found' }, { status: 404 });
     }
 
-    await prisma.productImage.delete({ where: { id } });
+    // Try to delete the file from disk
+    try {
+      await unlink(existing.path);
+    } catch {
+      // File may already be deleted, continue with DB cleanup
+    }
 
-    return NextResponse.json({ data: { message: 'Image deleted successfully' } });
+    await prisma.media.delete({ where: { id } });
+
+    return NextResponse.json({ data: { message: 'Media deleted successfully' } });
   } catch (err) {
     console.error('Error deleting media:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

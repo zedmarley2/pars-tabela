@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin-auth';
+import prisma from '@/lib/prisma';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
@@ -51,7 +52,17 @@ export async function POST(request: NextRequest) {
 
     const url = `/uploads/${uniqueName}`;
 
-    return NextResponse.json({ data: { url, filename: uniqueName } }, { status: 201 });
+    const media = await prisma.media.create({
+      data: {
+        filename: file.name,
+        path: filePath,
+        url,
+        mimetype: file.type,
+        size: file.size,
+      },
+    });
+
+    return NextResponse.json({ data: { id: media.id, url, filename: uniqueName } }, { status: 201 });
   } catch (err) {
     console.error('Error uploading file:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
